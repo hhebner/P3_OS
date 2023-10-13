@@ -17,8 +17,7 @@ struct PCB process_table[20];
 //structure for message buffer
 typedef struct mssg_buffer {
         long mtype;
-        char str_data[100];
-        int int_data;
+        int status;
 } mssg_buffer;
 
 /* Here is where we update the process table with the relevant child data. At first I was only having 
@@ -200,6 +199,12 @@ int main(int argc, char *argv[]) {
             shmdt(nano_ptr);
             shmctl(shmid_seconds, IPC_RMID, NULL);
             shmctl(shmid_nano, IPC_RMID, NULL);
+
+            if (msgctl(mssgq_id, IPC_RMID, NULL) == -1) {
+               perror("msgctl failed to clear queue");
+               exit(1);
+            }
+
         }   /*Here is where I increment the clock. This website helped me with the logic of it https://www.codingninjas.com/studio/library/digital-clock-using-c
               First we increment our nanoseconds to 200,000. I started out incrementing by 50,000,000 but that
               was making the program run almost instantaneously. For me 200,000 was a somewhat realistic speed.
@@ -245,6 +250,31 @@ int main(int argc, char *argv[]) {
                        active_workers++;
                        //We also update our PCB table here taking in the child pid, seconds_ptr and nano_ptr
                        update_PCB(fork_pid, seconds_ptr, nano_ptr);
+
+                       mssg_buffer mssg;
+                       mssg.mtype = fork_pid;
+
+                       if(msgsnd(mssgq_id, &mssg, sizeof(mssg) - sizeof(long), 0) == -1) {
+                               perror("msgsnd failed\n");
+                               exit(1)
+                       }
+
+                       // Check and Handle Messages from Workers Continuously
+                       for (int i = 0; i < total_workers_launched; ++i) {
+                                mssg_buffer rcv_mssg;
+                                if (msgrcv(mssgq_id, &rcv_mssg, sizeof(mssg_buffer), 0, IPC_NOWAIT) != -1) {
+                                        if (rcv_mssg.status == 0) {
+                                                printf("oss: Worker %ld is about to terminate.\n", rcv_mssg.mtype);
+                                                active_workers--;
+                                        // Additional Termination Handling...
+                                        } else if (rcv_mssg.status == 1) {
+                                                printf("oss: Worker %ld will continue.\n", rcv_mssg.mtype);
+                                        }
+                                        } else {
+                                               perror("oss: failed to receive message in parent");
+                                        }
+                       }
+
                 } else {
                        perror("fork has failed");//If fork fails we will get a descriptive error message
                        exit(1);
@@ -259,7 +289,7 @@ int main(int argc, char *argv[]) {
            pid_t wait_pid = waitpid(-1, NULL, WNOHANG);
            if (wait_pid > 0) {
                    update_PCB_on_termination(wait_pid);//Here we are clearing out the data a process was holding after a child has terminated 
-                   active_workers--;
+                  //active_workers--;
            }
 
 
