@@ -13,6 +13,14 @@ struct PCB {
     int start_nano; 
 };
 struct PCB process_table[20];
+
+//structure for message buffer
+typedef struct mssg_buffer {
+        long mtype;
+        char str_data[100];
+        int int_data;
+} mssg_buffer;
+
 /* Here is where we update the process table with the relevant child data. At first I was only having 
    the function take in pid, but becasue *seconds_ptr and *nano_ptr are not intialized in this scope
    I had to make them parameters as well, but that did not cause any issues. This will loop through 
@@ -116,6 +124,14 @@ int main(int argc, char *argv[]) {
     //These are two keys with random numbers I chose these will be used to create our shared memory spaces
     const int seconds_key = 5396211;
     const int nano_key = 2798414;
+
+    //Picking a random number for key and then creating the shared memory space for message queue
+    key_t mssg_key = 9876550
+    if (( int mssgq_id = msgget(mssg_key, 0666 | IPC_CREAT)) == -1) {
+        perror("msgget in parent");
+        exit(1);
+}
+
     /* I basically used exactly what you gave us on canvas but I will still explain. Here we are setting 
        our shmid_seconds variable to shmget(...) this is actually creating the shared memory space for 
        our seconds variable. We use our key as the first parameter that we created above for a space 
